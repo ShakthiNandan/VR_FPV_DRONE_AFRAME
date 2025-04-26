@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Drone Flight</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+</head>
+
+<body>
+    <a-scene>
+        <a-assets>
+            <a-asset-item id="drone-obj" src="/static/models/drone.obj"></a-asset-item>
+            <!-- If you have an MTL file for materials -->
+            <a-asset-item id="drone-mtl" src="/static/models/drone.mtl"></a-asset-item>
+            <a-asset-item id="environment" src="/static/models/smb.glb"></a-asset-item>
+        </a-assets>
+          
+        <a-entity gltf-model="#environment"
+                  position="0 0 0"
+                  scale="5 5 5"></a-entity>
+          
+        <!-- Drone Entity -->
+        <a-entity id="drone" obj-model="obj: #drone-obj; mtl: #drone-mtl" position="0 1.6 -5" scale="0.5 0.5 0.5" drone-controls>
+        </a-entity>
+        
+        <a-entity id="smb" obj-model="obj: #smb-obj; mtl: #smb-mtl" position="0 1.6 -5" scale="0.5 0.5 0.5">
+        </a-entity>
+        
+        <!-- Camera that follows the drone -->
+        <a-entity id="camera-rig" position="0 0 0" camera-follow="target: #drone; offset: 0 2 -7">
+            <a-camera position="0 1.6 0" wasd-controls-enabled="false"></a-camera>
+        </a-entity>
+
+        <a-sky color="#ECECEC"></a-sky>
+    </a-scene>
+
+    <script>
+        AFRAME.registerComponent('drone-controls', {
+          init: function () {
+            this.keys = {};
+            this.rotation = { x: 0, y: 0, z: 0 };
+            this.THREE = AFRAME.THREE; // << ADD THIS LINE
+      
+            window.addEventListener('keydown', (e) => {
+              this.keys[e.code.toLowerCase()] = true;
+            });
+            window.addEventListener('keyup', (e) => {
+              this.keys[e.code.toLowerCase()] = false;
+            });
+          },
+          tick: function (time, delta) {
+            const moveSpeed = 0.01 * delta;
+            const rotateSpeed = 0.05 * delta;
+            const tiltAngle = 15;
+      
+            let moveX = 0;
+            let moveY = 0;
+            let moveZ = 0;
+      
+            const pos = this.el.getAttribute('position');
+            const rot = this.el.getAttribute('rotation');
+      
+            if (this.keys['keyw']) moveZ -= moveSpeed;
+            if (this.keys['keys']) moveZ += moveSpeed;
+            if (this.keys['keya']) moveX -= moveSpeed;
+            if (this.keys['keyd']) moveX += moveSpeed;
+            if (this.keys['space']) moveY += moveSpeed;
+            if (this.keys['shiftleft']) moveY -= moveSpeed;
+      
+            if (this.keys['keyq']) rot.y += rotateSpeed * 10;
+            if (this.keys['keye']) rot.y -= rotateSpeed * 10;
+      
+            // Movement based on rotation
+            const angleRad = this.THREE.MathUtils.degToRad(rot.y);
+            pos.x += moveZ * Math.sin(angleRad) + moveX * Math.cos(angleRad);
+            pos.z += moveZ * Math.cos(angleRad) - moveX * Math.sin(angleRad);
+            pos.y += moveY;
+      
+            this.el.setAttribute('position', pos);
+            this.el.setAttribute('rotation', rot);
+      
+            // Tilting
+            let tiltX = 0;
+            let tiltZ = 0;
+            if (this.keys['keyw']) tiltX = -tiltAngle;
+            if (this.keys['keys']) tiltX = tiltAngle;
+            if (this.keys['keya']) tiltZ = tiltAngle;
+            if (this.keys['keyd']) tiltZ = -tiltAngle;
+      
+            this.el.object3D.rotation.x = this.THREE.MathUtils.degToRad(tiltX);
+            this.el.object3D.rotation.z = this.THREE.MathUtils.degToRad(tiltZ);
+            this.el.object3D.rotation.y = this.THREE.MathUtils.degToRad(rot.y);
+          }
+        });
+        
+        // Camera follow component
+        AFRAME.registerComponent('camera-follow', {
+          schema: {
+            target: { type: 'selector' },
+            offset: { type: 'vec3', default: {x: 0, y: 2, z: 5} },
+            smoothing: { type: 'number', default: 10 },
+            rotationSmoothing: { type: 'number', default: 3 } // Added rotation smoothing factor
+          },
+          
+          init: function() {
+            this.targetPosition = new THREE.Vector3();
+            this.currentPosition = new THREE.Vector3();
+            this.targetRotation = new THREE.Euler();
+          },
+          
+          tick: function(time, delta) {
+            const target = this.data.target;
+            if (!target) return;
+            
+            // Get drone's position and rotation
+            target.object3D.getWorldPosition(this.targetPosition);
+            const droneRotation = target.getAttribute('rotation');
+            
+            // Calculate camera position based on drone's rotation
+            // This creates an offset position that rotates with the drone
+            const offset = this.data.offset;
+            const angleRad = THREE.MathUtils.degToRad(droneRotation.y);
+            
+            const offsetX = Math.sin(angleRad) * offset.z + Math.cos(angleRad) * offset.x;
+            const offsetZ = Math.cos(angleRad) * offset.z - Math.sin(angleRad) * offset.x;
+            
+            // Set camera position - following drone with offset
+            const newPosition = {
+              x: this.targetPosition.x - offsetX,
+              y: this.targetPosition.y + offset.y,
+              z: this.targetPosition.z - offsetZ
+            };
+            
+            // Apply position smoothing
+            const smoothing = Math.min(this.data.smoothing * (delta / 1000), 1);
+            const currentPos = this.el.getAttribute('position');
+            
+            currentPos.x += (newPosition.x - currentPos.x) * smoothing;
+            currentPos.y += (newPosition.y - currentPos.y) * smoothing;
+            currentPos.z += (newPosition.z - currentPos.z) * smoothing;
+            
+            this.el.setAttribute('position', currentPos);
+            
+            // Apply smoothed rotation (specifically for Y rotation)
+            const rotSmoothing = Math.min(this.data.rotationSmoothing * (delta / 1000), 1);
+            const currentRot = this.el.getAttribute('rotation');
+            
+            // Calculate the shortest path to the target rotation
+            let rotDiff = droneRotation.y - currentRot.y;
+            
+            // Handle rotation wrapping (e.g., from 359° to 0°)
+            if (rotDiff > 180) rotDiff -= 360;
+            if (rotDiff < -180) rotDiff += 360;
+            
+            currentRot.y += rotDiff * rotSmoothing;
+            this.el.setAttribute('rotation', currentRot);
+          }
+        });
+      </script>
+</body>
+</html>
