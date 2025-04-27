@@ -1,9 +1,10 @@
 #include <WiFi.h>
 #include <WebServer.h>
 
+
 // Pin Definitions
-const int VRx = 32; // Joystick X-axis
-const int VRy = 33; // Joystick Y-axis
+const int VRx = 32; // Joystick X-axis (connected to GPIO32)
+const int VRy = 33; // Joystick Y-axis (connected to GPIO33)
 
 // Wi-Fi credentials
 const char* ssid = "qwertyuiop";     
@@ -77,7 +78,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
           document.getElementById('yVal').innerText = y;
 
           // Normalize joystick values (assuming ADC 0-4095)
-          let normX = (x / 4095) * 160; // 160px move in 200px box (centered 20px dot)
+          let normX = (x / 4095) * 160;
           let normY = (y / 4095) * 160;
 
           document.getElementById('joystickDot').style.left = normX + "px";
@@ -110,14 +111,41 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 </html>
 )rawliteral";
 
+// Handle root page
 void handleRoot() {
   server.send_P(200, "text/html", htmlPage);
 }
 
+// Handle /read JSON API
 void handleRead() {
   xValue = analogRead(VRx);
   yValue = analogRead(VRy);
 
+  // Calculate Direction
+  String direction = "Center";
+  if (yValue < 1200) direction = "Up";
+  else if (yValue > 2800) direction = "Down";
+
+  if (xValue < 1200) {
+    if (yValue < 1200) direction = "Up-Left";
+    else if (yValue > 2800) direction = "Down-Left";
+    else direction = "Left";
+  }
+  else if (xValue > 2800) {
+    if (yValue < 1200) direction = "Up-Right";
+    else if (yValue > 2800) direction = "Down-Right";
+    else direction = "Right";
+  }
+
+  // Print nicely to Serial
+  Serial.print("X: ");
+  Serial.print(xValue);
+  Serial.print(" | Y: ");
+  Serial.print(yValue);
+  Serial.print(" | Direction: ");
+  Serial.println(direction);
+
+  // Send JSON response
   String json = "{\"x\":" + String(xValue) + ",\"y\":" + String(yValue) + "}";
   server.send(200, "application/json", json);
 }

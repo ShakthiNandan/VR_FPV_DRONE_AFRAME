@@ -54,8 +54,8 @@
         </a-entity>
         
         <!-- Camera that follows the drone -->
-        <a-entity id="camera-rig" position="0 0 0" camera-follow="target: #drone; offset: 0 2 -7">
-            <a-camera position="0 1.6 0" wasd-controls-enabled="false"></a-camera>
+        <a-entity id="camera-rig" position="0 0 0" camera-follow="target: #drone; offset: 0 0.2 0">
+            <a-camera position="0 0 0" wasd-controls-enabled="false" fov="95" look-controls="enabled: false"></a-camera>
         </a-entity>
 
         <!-- Ground plane for shadow reception -->
@@ -156,7 +156,7 @@
         AFRAME.registerComponent('camera-follow', {
           schema: {
             target: { type: 'selector' },
-            offset: { type: 'vec3', default: {x: 0, y: 2, z: 5} },
+            offset: { type: 'vec3', default: {x: 0, y: 0.2, z: 0} },
             smoothing: { type: 'number', default: 10 },
             rotationSmoothing: { type: 'number', default: 3 } // Added rotation smoothing factor
           },
@@ -176,18 +176,15 @@
             const droneRotation = target.getAttribute('rotation');
             
             // Calculate camera position based on drone's rotation
-            // This creates an offset position that rotates with the drone
+            // More direct attachment to drone position with minimal offset
             const offset = this.data.offset;
             const angleRad = THREE.MathUtils.degToRad(droneRotation.y);
             
-            const offsetX = Math.sin(angleRad) * offset.z + Math.cos(angleRad) * offset.x;
-            const offsetZ = Math.cos(angleRad) * offset.z - Math.sin(angleRad) * offset.x;
-            
-            // Set camera position - following drone with offset
+            // Set camera position - directly on the drone with minimal offset
             const newPosition = {
-              x: this.targetPosition.x - offsetX,
+              x: this.targetPosition.x,
               y: this.targetPosition.y + offset.y,
-              z: this.targetPosition.z - offsetZ
+              z: this.targetPosition.z
             };
             
             // Apply position smoothing
@@ -200,18 +197,27 @@
             
             this.el.setAttribute('position', currentPos);
             
-            // Apply smoothed rotation (specifically for Y rotation)
+            // Apply smoothed rotation - match drone rotation completely
             const rotSmoothing = Math.min(this.data.rotationSmoothing * (delta / 1000), 1);
             const currentRot = this.el.getAttribute('rotation');
             
-            // Calculate the shortest path to the target rotation
-            let rotDiff = droneRotation.y - currentRot.y;
+            // Match all rotation axes for proper drone view
+            let rotDiffY = droneRotation.y - currentRot.y;
+            if (rotDiffY > 180) rotDiffY -= 360;
+            if (rotDiffY < -180) rotDiffY += 360;
             
-            // Handle rotation wrapping (e.g., from 359° to 0°)
-            if (rotDiff > 180) rotDiff -= 360;
-            if (rotDiff < -180) rotDiff += 360;
+            let rotDiffX = droneRotation.x - currentRot.x;
+            if (rotDiffX > 180) rotDiffX -= 360;
+            if (rotDiffX < -180) rotDiffX += 360;
             
-            currentRot.y += rotDiff * rotSmoothing;
+            let rotDiffZ = droneRotation.z - currentRot.z;
+            if (rotDiffZ > 180) rotDiffZ -= 360;
+            if (rotDiffZ < -180) rotDiffZ += 360;
+            
+            currentRot.y += rotDiffY * rotSmoothing;
+            currentRot.x += rotDiffX * rotSmoothing;
+            currentRot.z += rotDiffZ * rotSmoothing;
+            
             this.el.setAttribute('rotation', currentRot);
           }
         });
@@ -262,6 +268,7 @@
               // Force shadow map to update
               light.light.shadow.needsUpdate = true;
               
+            
               // Only access shadow map if it exists
               if (light.light.shadow.map) {
                 light.light.shadow.map.needsUpdate = true;
