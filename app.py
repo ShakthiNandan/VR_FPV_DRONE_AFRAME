@@ -13,4 +13,4 @@ def training():
     return render_template('training.html')
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(ssl_context=('cert.pem', 'key.pem'),debug=True,host="0.0.0.0")

@@ -1,8 +1,8 @@
 // Pin Definitions
 const int VRx1 = 36; // Joystick 1 X-axis
 const int VRy1 = 39; // Joystick 1 Y-axis
-const int VRx2 = 34; // Joystick 2 X-axis
-const int VRy2 = 35; // Joystick 2 Y-axis
+const int VRx2 = 25; // Joystick 2 X-axis
+const int VRy2 = 26; // Joystick 2 Y-axis
 
 void setup() {
   Serial.begin(115200);

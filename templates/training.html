@@ -94,12 +94,47 @@
         
         // We'll separate controls for two joysticks
         // Joystick 1: forward/backward/left/right movement
-        // Joystick 2: rotation and up/down movement (will be implemented later)
+        // Joystick 2: up/down movement and rotation
         this.joystick1 = { dx: 0, dy: 0, direction: 'center' };
-        this.joystick2 = { dx: 0, dy: 0, direction: 'center' }; // Placeholder for second joystick
+        this.joystick2 = { dx: 0, dy: 0, direction: 'center' };
+        
+        // Calibration data from backend
+        // These values match the values in calibration_data_joy1.json and calibration_data_joy2.json
+        this.calibration = {
+          joystick1: {
+            center: { x: 1971, y: 1909 },
+            up: { x: 1969, y: 1456 },
+            down: { x: 1970, y: 1185 },
+            left: { x: 1155, y: 2876 },
+            right: { x: 2229, y: 1949 }
+          },
+          joystick2: {
+            center: { x: 2006, y: 2029 },
+            up: { x: 1965, y: 1167 },
+            down: { x: 1969, y: 2221 },
+            left: { x: 1484, y: 3217 },
+            right: { x: 2237, y: 1956 }
+          }
+        };
+        
+        // Calculate directional thresholds based on calibration
+        this.thresholds = {
+          joystick1: {
+            up: Math.abs(this.calibration.joystick1.center.y - this.calibration.joystick1.up.y) * 0.5,
+            down: Math.abs(this.calibration.joystick1.center.y - this.calibration.joystick1.down.y) * 0.5,
+            left: Math.abs(this.calibration.joystick1.center.x - this.calibration.joystick1.left.x) * 0.5,
+            right: Math.abs(this.calibration.joystick1.center.x - this.calibration.joystick1.right.x) * 0.5
+          },
+          joystick2: {
+            up: Math.abs(this.calibration.joystick2.center.y - this.calibration.joystick2.up.y) * 0.5,
+            down: Math.abs(this.calibration.joystick2.center.y - this.calibration.joystick2.down.y) * 0.5,
+            left: Math.abs(this.calibration.joystick2.center.x - this.calibration.joystick2.left.x) * 0.5,
+            right: Math.abs(this.calibration.joystick2.center.x - this.calibration.joystick2.right.x) * 0.5
+          }
+        };
         
         // Connect to your Python WebSocket server
-        this.socket = new WebSocket('ws://localhost:8765');
+        this.socket = new WebSocket('wss://192.168.162.58:8765');
         
         this.socket.addEventListener('open', (event) => {
           console.log('Connected to joystick WebSocket server');
@@ -108,15 +143,25 @@
         this.socket.addEventListener('message', (event) => {
           const data = JSON.parse(event.data);
           
-          // For now, we're only using the first joystick data
-          // In the future, your WebSocket can send data for both joysticks
-          this.joystick1 = {
-            dx: data.dx,
-            dy: data.dy,
-            direction: data.direction
-          };
+          // Now handling data for both joysticks
+          if (data.joystick1) {
+            this.joystick1 = {
+              dx: data.joystick1.dx,
+              dy: data.joystick1.dy,
+              direction: data.joystick1.direction
+            };
+          }
           
-          console.log('Joystick data:', this.joystick1);
+          if (data.joystick2) {
+            this.joystick2 = {
+              dx: data.joystick2.dx,
+              dy: data.joystick2.dy,
+              direction: data.joystick2.direction
+            };
+          }
+          
+          console.log('Joystick1 data:', this.joystick1);
+          console.log('Joystick2 data:', this.joystick2);
         });
         
         this.socket.addEventListener('close', (event) => {
@@ -126,8 +171,8 @@
       
       tick: function (time, delta) {
         const moveSpeed = 0.01 * delta;
-        const rotateSpeed = 0.05 * delta;
-        const tiltAngle = 15;
+        const rotateSpeed = 0.005 * delta;
+        const tiltAngle = 1;
         
         let moveX = 0;
         let moveY = 0;
@@ -137,64 +182,80 @@
         const pos = this.el.getAttribute('position');
         const rot = this.el.getAttribute('rotation');
         
+        // Use joystick specific thresholds based on calibration data
+        const joy1_thresholds = this.thresholds.joystick1;
+        const joy2_thresholds = this.thresholds.joystick2;
+        
+        // Calculate intensity based on how far joystick is pushed from center
+        // This will give smoother, more proportional control
+        
         // JOYSTICK 1: Forward/backward (Z-axis) and left/right (X-axis)
-        const threshold = 50;
-        
-        // Forward/backward movement from joystick 1
-        if (this.joystick1.dy < -threshold) {
-          moveZ -= moveSpeed * (Math.abs(this.joystick1.dy) / 500);
-        } else if (this.joystick1.dy > threshold) {
-          moveZ += moveSpeed * (Math.abs(this.joystick1.dy) / 500);
+        if (Math.abs(this.joystick1.dy) > joy1_thresholds.up) {
+          // Normalize intensity based on calibration range
+          const maxVertRange = Math.max(
+            Math.abs(this.calibration.joystick1.up.y - this.calibration.joystick1.center.y),
+            Math.abs(this.calibration.joystick1.down.y - this.calibration.joystick1.center.y)
+          );
+          
+          const intensity = Math.min(Math.abs(this.joystick1.dy) / maxVertRange, 1.0);
+          
+          if (this.joystick1.dy < 0) { // Up - Move forward
+            moveZ -= moveSpeed * intensity * 2;
+          } else { // Down - Move backward
+            moveZ += moveSpeed * intensity * 2;
+          }
         }
         
-        // Left/right movement from joystick 1
-        if (this.joystick1.dx < -threshold) {
-          moveX -= moveSpeed * (Math.abs(this.joystick1.dx) / 500);
-        } else if (this.joystick1.dx > threshold) {
-          moveX += moveSpeed * (Math.abs(this.joystick1.dx) / 500);
+        if (Math.abs(this.joystick1.dx) > joy1_thresholds.left) {
+          // Normalize intensity based on calibration range
+          const maxHorizRange = Math.max(
+            Math.abs(this.calibration.joystick1.left.x - this.calibration.joystick1.center.x),
+            Math.abs(this.calibration.joystick1.right.x - this.calibration.joystick1.center.x)
+          );
+          
+          const intensity = Math.min(Math.abs(this.joystick1.dx) / maxHorizRange, 1.0);
+          
+          if (this.joystick1.dx < 0) { // Left - Move left
+            moveX -= moveSpeed * intensity * 2;
+          } else { // Right - Move right
+            moveX += moveSpeed * intensity * 2;
+          }
         }
         
-        // JOYSTICK 2: Future implementation
-        // For now we'll put some placeholder code that can be activated later
-        // These would come from the second joystick:
+        // JOYSTICK 2: Altitude (Y-axis) and rotation (left/right turning)
+        if (Math.abs(this.joystick2.dy) > joy2_thresholds.up) {
+          // Normalize intensity based on calibration range
+          const maxVertRange = Math.max(
+            Math.abs(this.calibration.joystick2.up.y - this.calibration.joystick2.center.y),
+            Math.abs(this.calibration.joystick2.down.y - this.calibration.joystick2.center.y)
+          );
+          
+          const intensity = Math.min(Math.abs(this.joystick2.dy) / maxVertRange, 1.0);
+          
+          if (this.joystick2.dy < 0) { // Up - Increase altitude
+            moveY += moveSpeed * intensity * 2;
+          } else { // Down - Decrease altitude
+            moveY -= moveSpeed * intensity * 2;
+          }
+        }
         
-        // Rotation (left/right turning)
-        // if (this.joystick2.dx < -threshold) {
-        //   rot.y += rotateSpeed * 10 * (Math.abs(this.joystick2.dx) / 500);
-        // } else if (this.joystick2.dx > threshold) {
-        //   rot.y -= rotateSpeed * 10 * (Math.abs(this.joystick2.dx) / 500);
-        // }
+        if (Math.abs(this.joystick2.dx) > joy2_thresholds.left) {
+          // Normalize intensity based on calibration range
+          const maxHorizRange = Math.max(
+            Math.abs(this.calibration.joystick2.left.x - this.calibration.joystick2.center.x),
+            Math.abs(this.calibration.joystick2.right.x - this.calibration.joystick2.center.x)
+          );
+          
+          const intensity = Math.min(Math.abs(this.joystick2.dx) / maxHorizRange, 1.0);
+          
+          if (this.joystick2.dx < 0) { // Left - Turn left
+            rot.y += rotateSpeed * 20 * intensity;
+          } else { // Right - Turn right
+            rot.y -= rotateSpeed * 20 * intensity;
+          }
+        }
         
-        // Up/down movement
-        // if (this.joystick2.dy < -threshold) {
-        //   moveY += moveSpeed * (Math.abs(this.joystick2.dy) / 500);
-        // } else if (this.joystick2.dy > threshold) {
-        //   moveY -= moveSpeed * (Math.abs(this.joystick2.dy) / 500);
-        // }
-        
-        // For temporary testing, we can use keyboard controls for joystick 2 functions
-        const keyboard = {
-          q: false, // Rotate left
-          e: false, // Rotate right
-          space: false, // Up
-          shift: false  // Down
-        };
-        
-        // You can uncomment this to test with keyboard before second joystick is ready
-        // document.addEventListener('keydown', (e) => {
-        //   if (e.key === 'q') keyboard.q = true;
-        //   if (e.key === 'e') keyboard.e = true;
-        //   if (e.key === ' ') keyboard.space = true;
-        //   if (e.key === 'Shift') keyboard.shift = true;
-        // });
-        // document.addEventListener('keyup', (e) => {
-        //   if (e.key === 'q') keyboard.q = false;
-        //   if (e.key === 'e') keyboard.e = false;
-        //   if (e.key === ' ') keyboard.space = false;
-        //   if (e.key === 'Shift') keyboard.shift = false;
-        // });
-        
-        // Movement based on rotation (exactly as in original)
+        // Movement based on rotation
         const angleRad = this.THREE.MathUtils.degToRad(rot.y);
         pos.x += moveZ * Math.sin(angleRad) + moveX * Math.cos(angleRad);
         pos.z += moveZ * Math.cos(angleRad) - moveX * Math.sin(angleRad);
@@ -203,7 +264,7 @@
         this.el.setAttribute('position', pos);
         this.el.setAttribute('rotation', rot);
         
-        // Tilting based on movement (exactly as in original)
+        // Tilting based on movement
         let tiltX = 0;
         let tiltZ = 0;
         
