@@ -3,7 +3,7 @@ import json
 import time
 import re
 import msvcrt
-from pynput.mouse import Controller as MouseController
+from pynput.mouse import Controller as MouseController, Button
 from pynput.keyboard import Controller as KeyboardController, Key
 
 # CONFIG
@@ -90,6 +90,10 @@ def control(mode):
         's': False,
         'd': False
     }
+    
+    # For rapid clicking/key presses
+    last_key_time = 0
+    key_interval = 0.2  # seconds between key presses
 
     while True:
         x, y = read_joystick_line()
@@ -117,7 +121,7 @@ def control(mode):
             if delta_x != 0 or delta_y != 0:
                 mouse.move(int(delta_x * mouse_speed), int(delta_y * mouse_speed))
 
-        elif mode == '2':  # Keyboard joystick control
+        elif mode == '2':  # Keyboard joystick control - Press and hold
             # W (up)
             if delta_y > key_threshold:
                 if not keys_pressed['w']:
@@ -157,6 +161,45 @@ def control(mode):
                 if keys_pressed['a']:
                     keyboard.release('a')
                     keys_pressed['a'] = False
+                    
+        elif mode == '3':  # Mouse control with rapid clicking
+            if delta_x != 0 or delta_y != 0:
+                mouse.move(int(delta_x * mouse_speed), int(delta_y * mouse_speed))
+                
+                # Add rapid clicking when moving - check if it's time for another click
+                current_time = time.time()
+                if current_time - last_key_time >= key_interval:
+                    mouse.click(Button.left)
+                    last_key_time = current_time
+                    
+        elif mode == '4':  # Keyboard with rapid pressing (not holding down)
+            current_time = time.time()
+            
+            # Only perform key presses at intervals for rapid pressing
+            if current_time - last_key_time >= key_interval:
+                # W (up)
+                if delta_y > key_threshold:
+                    keyboard.press('w')
+                    keyboard.release('w')
+                
+                # S (down)
+                if delta_y < -key_threshold:
+                    keyboard.press('s')
+                    keyboard.release('s')
+                
+                # D (right)
+                if delta_x > key_threshold:
+                    keyboard.press('d')
+                    keyboard.release('d')
+                
+                # A (left)
+                if delta_x < -key_threshold:
+                    keyboard.press('a')
+                    keyboard.release('a')
+                    
+                # Update the last key press time if any direction was pressed
+                if abs(delta_x) > key_threshold or abs(delta_y) > key_threshold:
+                    last_key_time = current_time
 
         time.sleep(0.05)
 
@@ -179,8 +222,10 @@ if __name__ == "__main__":
     elif mode == '2':
         print("\nChoose control type:")
         print("1. Mouse Control")
-        print("2. Keyboard (Joystick) Control")
-        control_mode = input("Enter 1 or 2: ").strip()
+        print("2. Keyboard (Joystick) Control - Press and Hold")
+        print("3. Mouse Control with Rapid Clicking")
+        print("4. Keyboard Control with Rapid Pressing")
+        control_mode = input("Enter 1, 2, 3, or 4: ").strip()
         control(control_mode)
     else:
         print("Invalid mode selected.")
