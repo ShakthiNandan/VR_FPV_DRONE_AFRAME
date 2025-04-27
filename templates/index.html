@@ -4,10 +4,13 @@
 <head>
     <title>Drone Flight</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <!-- Add shadow component for A-Frame -->
+    <script src="https://unpkg.com/aframe-extras@6.1.1/dist/aframe-extras.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/loaders/RGBELoader.js"></script>
 </head>
 
 <body>
-    <a-scene>
+    <a-scene shadow="type: pcfsoft" renderer="antialias: true; physicallyCorrectLights: true; colorManagement: true; gammaOutput: true;">
         <a-assets>
             <a-asset-item id="drone-obj" src="/static/models/drone.obj"></a-asset-item>
             <!-- If you have an MTL file for materials -->
@@ -15,15 +18,39 @@
             <a-asset-item id="environment" src="/static/models/smb.glb"></a-asset-item>
         </a-assets>
           
+        <!-- Enhanced lighting setup with large-scale shadow area -->
+        <a-entity light="type: ambient; color: #BBB; intensity: 0.5"></a-entity>
+        <a-entity id="directional-light" 
+                  light="type: directional; 
+                        color: #FFF; 
+                        intensity: 0.8; 
+                        castShadow: true" 
+                  position="50 50 50" 
+                  shadow="mapSize: 4096; 
+                         far: 5000; 
+                         near: 1; 
+                         left: -2000;
+                         right: 2000;
+                         top: 2000;
+                         bottom: -2000;
+                         bias: -0.0005"
+                  shadow-follow="target: #drone; offset: 0 200 0; smoothing: 0.05"></a-entity>
+        
+        <!-- Additional fill lights -->
+          
+      <a-entity light="type: directional; intensity: 0.6;" position="2 4 1" shadow="cast: true"></a-entity>
+      <a-entity light="type: ambient; intensity: 0.4;"></a-entity>
+
         <a-entity gltf-model="#environment"
                   position="0 0 0"
-                  scale="5 5 5"></a-entity>
+                  scale="5 5 5"
+                  shadow="cast: true; receive: true"></a-entity>
           
         <!-- Drone Entity -->
-        <a-entity id="drone" obj-model="obj: #drone-obj; mtl: #drone-mtl" position="0 1.6 -5" scale="0.5 0.5 0.5" drone-controls>
+        <a-entity id="drone" obj-model="obj: #drone-obj; mtl: #drone-mtl" position="0 1.6 -5" scale="0.5 0.5 0.5" drone-controls shadow="cast: true; receive: false">
         </a-entity>
         
-        <a-entity id="smb" obj-model="obj: #smb-obj; mtl: #smb-mtl" position="0 1.6 -5" scale="0.5 0.5 0.5">
+        <a-entity id="smb" obj-model="obj: #smb-obj; mtl: #smb-mtl" position="0 1.6 -5" scale="0.5 0.5 0.5" shadow="cast: true; receive: true">
         </a-entity>
         
         <!-- Camera that follows the drone -->
@@ -31,10 +58,42 @@
             <a-camera position="0 1.6 0" wasd-controls-enabled="false"></a-camera>
         </a-entity>
 
-        <a-sky color="#ECECEC"></a-sky>
+        <!-- Ground plane for shadow reception -->
+        <a-plane position="0 -0.1 0" rotation="-90 0 0" width="5000" height="5000" color="#A3A3A3" shadow="receive: true"></a-plane>
+
+        <a-sky color="#87CEEB"></a-sky>
     </a-scene>
 
     <script>
+        AFRAME.registerComponent('hdr-environment', {
+          init: function () {
+            const sceneEl = this.el;
+            const scene = sceneEl.object3D;
+            const renderer = sceneEl.renderer;
+  
+            if (!renderer) {
+              sceneEl.addEventListener('renderstart', () => {
+                this.loadHDR(sceneEl.renderer, scene);
+              });
+            } else {
+              this.loadHDR(renderer, scene);
+            }
+          },
+  
+          loadHDR: function (renderer, scene) {
+            const pmremGenerator = new THREE.PMREMGenerator(renderer);
+            pmremGenerator.compileEquirectangularShader();
+  
+            new THREE.RGBELoader()
+              .setDataType(THREE.UnsignedByteType)
+              .load('sky.hdr', (texture) => {
+                const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+                scene.environment = envMap;
+                texture.dispose();
+                pmremGenerator.dispose();
+              });
+          }
+        });
         AFRAME.registerComponent('drone-controls', {
           init: function () {
             this.keys = {};
@@ -154,6 +213,64 @@
             
             currentRot.y += rotDiff * rotSmoothing;
             this.el.setAttribute('rotation', currentRot);
+          }
+        });
+        
+        // Shadow follow component - keeps the directional light's shadow camera following the drone
+        AFRAME.registerComponent('shadow-follow', {
+          schema: {
+            target: { type: 'selector' },
+            offset: { type: 'vec3', default: {x: 0, y: 200, z: 0} },
+            smoothing: { type: 'number', default: 0.05 }
+          },
+          
+          init: function() {
+            this.targetPosition = new THREE.Vector3();
+            this.currentPosition = new THREE.Vector3();
+            
+            // For debugging shadow camera
+            if (false) { // Set to true to see shadow camera
+              this.el.components.light.light.shadow.camera.visible = true;
+              const helper = new THREE.CameraHelper(this.el.components.light.light.shadow.camera);
+              document.querySelector('a-scene').object3D.add(helper);
+            }
+          },
+          
+          tick: function(time, delta) {
+            const target = this.data.target;
+            if (!target) return;
+            
+            // Get target position
+            target.object3D.getWorldPosition(this.targetPosition);
+            
+            // Calculate new position with offset
+            const newX = this.targetPosition.x + this.data.offset.x;
+            const newY = this.targetPosition.y + this.data.offset.y;
+            const newZ = this.targetPosition.z + this.data.offset.z;
+            
+            // Get current light position
+            const lightPos = this.el.object3D.position;
+            
+            // Apply smoothing
+            lightPos.x += (newX - lightPos.x) * this.data.smoothing;
+            lightPos.y += (newY - lightPos.y) * this.data.smoothing;
+            lightPos.z += (newZ - lightPos.z) * this.data.smoothing;
+            
+            // Update shadow camera
+            const light = this.el.components.light;
+            if (light && light.light && light.light.shadow) {
+              // Force shadow map to update
+              light.light.shadow.needsUpdate = true;
+              
+              // Only access shadow map if it exists
+              if (light.light.shadow.map) {
+                light.light.shadow.map.needsUpdate = true;
+              }
+              
+              // Update shadow camera matrices
+              light.light.shadow.camera.updateProjectionMatrix();
+              light.light.shadow.camera.updateMatrixWorld();
+            }
           }
         });
       </script>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>A-Frame HDR Environment Example</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/loaders/RGBELoader.js"></script>
+  </head>
+  <body>
+    <a-scene hdr-environment shadow="type: pcfsoft">
+      
+      <!-- Assets -->
+      <a-assets>
+        <a-asset-item id="drone-obj" src="drone.obj"></a-asset-item>
+        <a-asset-item id="drone-mtl" src="drone.mtl"></a-asset-item>
+        <a-asset-item id="environment" src="/static/models/smb.glb"></a-asset-item>
+      </a-assets>
+
+      <!-- Model -->
+      <a-entity
+        obj-model="obj: #drone-obj; mtl: #drone-mtl"
+        position="0 1.6 -5"
+        scale="0.5 0.5 0.5"
+        shadow="cast: true"
+        material="metalness: 0.6; roughness: 0.2;"
+      ></a-entity>
+
+      <!-- Ground -->
+      <a-plane 
+        rotation="-90 0 0" 
+        width="30" 
+        height="30" 
+        color="#555" 
+        shadow="receive: true">
+      </a-plane>
+
+      <!-- Light -->
+      <a-entity light="type: directional; intensity: 0.6;" position="2 4 1" shadow="cast: true"></a-entity>
+      <a-entity light="type: ambient; intensity: 0.4;"></a-entity>
+
+    </a-scene>
+
+    <script>
+      AFRAME.registerComponent('hdr-environment', {
+        init: function () {
+          const sceneEl = this.el;
+          const scene = sceneEl.object3D;
+          const renderer = sceneEl.renderer;
+
+          if (!renderer) {
+            sceneEl.addEventListener('renderstart', () => {
+              this.loadHDR(sceneEl.renderer, scene);
+            });
+          } else {
+            this.loadHDR(renderer, scene);
+          }
+        },
+
+        loadHDR: function (renderer, scene) {
+          const pmremGenerator = new THREE.PMREMGenerator(renderer);
+          pmremGenerator.compileEquirectangularShader();
+
+          new THREE.RGBELoader()
+            .setDataType(THREE.UnsignedByteType)
+            .load('sky.hdr', (texture) => {
+              const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+              scene.environment = envMap;
+              texture.dispose();
+              pmremGenerator.dispose();
+            });
+        }
+      });
+    </script>
+
+  </body>
+</html>
+<!-- Note: Replace 'your-model.obj' and 'your-model.mtl' with the actual paths to your model files. -->
