@@ -41,7 +41,7 @@
     <a-entity gltf-model="#environment" position="0 0 0" scale="5 5 5" shadow="cast: true; receive: true"></a-entity>
 
     <!-- Drone Entity -->
-    <a-entity id="drone" obj-model="obj: #drone-obj; mtl: #drone-mtl" visible="false" position="0 1.6 -5"
+    <a-entity id="drone" obj-model="obj: #drone-obj; mtl: #drone-mtl" visible="true" position="0 1.6 -5"
       scale="0.5 0.5 0.5" drone-controls shadow="cast: true; receive: false">
     </a-entity>
 
@@ -50,7 +50,7 @@
     </a-entity>
 
     <!-- Camera that follows the drone -->
-    <a-entity id="camera-rig" position="0 0 0" camera-follow="target: #drone; offset: 0 4 0">
+    <a-entity id="camera-rig" position="0 0 0" camera-follow="target: #drone; offset: 0 -7 0">
       <a-camera position="0 0 0" wasd-controls-enabled="false" fov="95" look-controls="enabled: false"></a-camera>
     </a-entity>
 
@@ -134,7 +134,9 @@
         };
         
         // Connect to your Python WebSocket server
-        this.socket = new WebSocket('wss://192.168.162.58:8765');
+        //this.socket = new WebSocket('wss://192.168.162.58:8765');
+        
+        this.socket = new WebSocket('wss://ab77-157-51-73-202.ngrok-free.app');
         
         this.socket.addEventListener('open', (event) => {
           console.log('Connected to joystick WebSocket server');
