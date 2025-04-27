@@ -54,9 +54,12 @@
         </a-entity>
         
         <!-- Camera that follows the drone -->
-        <a-entity id="camera-rig" position="0 0 0" camera-follow="target: #drone; offset: 0 4 0">
+        <a-entity id="camera-rig" position="0 0 0" camera-follow="target: #drone; offset: 0 0.2 0">
             <a-camera position="0 0 0" wasd-controls-enabled="false" fov="95" look-controls="enabled: false"></a-camera>
         </a-entity>
+
+        <!-- Ground plane for shadow reception -->
+        <a-plane position="0 -0.1 0" rotation="-90 0 0" width="5000" height="5000" color="#A3A3A3" shadow="receive: true"></a-plane>
 
         <a-sky color="#87CEEB"></a-sky>
     </a-scene>
