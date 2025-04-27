@@ -103,9 +103,11 @@ def control(mode):
         # Relative movement from center
         delta_x = x - center_x
         delta_y = y - center_y
-
+        delta_z=delta_x
+        delta_x= delta_y
+        delta_y= delta_z
         # Fix the inverted movement (flip Y axis if needed)
-        delta_y = -delta_y  # <-- This corrects inverted controls
+        #delta_y = -delta_y  # <-- This corrects inverted controls
 
         deadzone = 15
         mouse_speed = 0.02

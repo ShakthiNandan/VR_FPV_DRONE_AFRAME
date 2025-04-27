@@ -87,135 +87,150 @@
           });
       }
     });
+    // AFRAME.registerComponent('drone-controls', {
+    //   init: function () {
+    //     this.keys = {};
+    //     this.rotation = { x: 0, y: 0, z: 0 };
+    //     this.THREE = AFRAME.THREE; // << ADD THIS LINE
+
+    //     window.addEventListener('keydown', (e) => {
+    //       this.keys[e.code.toLowerCase()] = true;
+    //     });
+    //     window.addEventListener('keyup', (e) => {
+    //       this.keys[e.code.toLowerCase()] = false;
+    //     });
+    //   },
+    //   tick: function (time, delta) {
+    //     const moveSpeed = 0.01 * delta;
+    //     const rotateSpeed = 0.05 * delta;
+    //     const tiltAngle = 15;
+
+    //     let moveX = 0;
+    //     let moveY = 0;
+    //     let moveZ = 0;
+
+    //     const pos = this.el.getAttribute('position');
+    //     const rot = this.el.getAttribute('rotation');
+
+    //     if (this.keys['keyw']) moveZ -= moveSpeed;
+    //     if (this.keys['keys']) moveZ += moveSpeed;
+    //     if (this.keys['keya']) moveX -= moveSpeed;
+    //     if (this.keys['keyd']) moveX += moveSpeed;
+    //     if (this.keys['space']) moveY += moveSpeed;
+    //     if (this.keys['shiftleft']) moveY -= moveSpeed;
+
+    //     if (this.keys['keyq']) rot.y += rotateSpeed * 10;
+    //     if (this.keys['keye']) rot.y -= rotateSpeed * 10;
+
+    //     // Movement based on rotation
+    //     const angleRad = this.THREE.MathUtils.degToRad(rot.y);
+    //     pos.x += moveZ * Math.sin(angleRad) + moveX * Math.cos(angleRad);
+    //     pos.z += moveZ * Math.cos(angleRad) - moveX * Math.sin(angleRad);
+    //     pos.y += moveY;
+
+    //     this.el.setAttribute('position', pos);
+    //     this.el.setAttribute('rotation', rot);
+
+    //     // Tilting
+    //     let tiltX = 0;
+    //     let tiltZ = 0;
+    //     if (this.keys['keyw']) tiltX = -tiltAngle;
+    //     if (this.keys['keys']) tiltX = tiltAngle;
+    //     if (this.keys['keya']) tiltZ = tiltAngle;
+    //     if (this.keys['keyd']) tiltZ = -tiltAngle;
+
+    //     this.el.object3D.rotation.x = this.THREE.MathUtils.degToRad(tiltX);
+    //     this.el.object3D.rotation.z = this.THREE.MathUtils.degToRad(tiltZ);
+    //     this.el.object3D.rotation.y = this.THREE.MathUtils.degToRad(rot.y);
+    //   }
+    // });
     AFRAME.registerComponent('drone-controls', {
+      schema: {},
       init: function () {
-        this.THREE = AFRAME.THREE;
+        this.velocity = new THREE.Vector3();
+        this.rotationVelocity = 0;
+        this.THREE = AFRAME.THREE; // Access THREE.js
         this.rotation = { x: 0, y: 0, z: 0 };
-        
-        // We'll separate controls for two joysticks
-        // Joystick 1: forward/backward/left/right movement
-        // Joystick 2: rotation and up/down movement (will be implemented later)
-        this.joystick1 = { dx: 0, dy: 0, direction: 'center' };
-        this.joystick2 = { dx: 0, dy: 0, direction: 'center' }; // Placeholder for second joystick
-        
-        // Connect to your Python WebSocket server
+
+        // 👇 Connect to your Python WebSocket server
         this.socket = new WebSocket('ws://localhost:8765');
-        
+
+        this.joystickData = { dx: 0, dy: 0, direction: 'center', mode: '1' };
+
         this.socket.addEventListener('open', (event) => {
           console.log('Connected to joystick WebSocket server');
         });
-        
+
         this.socket.addEventListener('message', (event) => {
           const data = JSON.parse(event.data);
-          
-          // For now, we're only using the first joystick data
-          // In the future, your WebSocket can send data for both joysticks
-          this.joystick1 = {
-            dx: data.dx,
-            dy: data.dy,
-            direction: data.direction
-          };
-          
-          console.log('Joystick data:', this.joystick1);
+          this.joystickData = data;  // Save joystick values
+          console.log('Joystick data:', this.joystickData);
         });
-        
+
         this.socket.addEventListener('close', (event) => {
           console.log('WebSocket connection closed');
         });
       },
-      
+
       tick: function (time, delta) {
-        const moveSpeed = 0.01 * delta;
-        const rotateSpeed = 0.05 * delta;
+        const el = this.el;
+        const moveSpeed = 0.01 * (delta / 16); // Normalize for 60fps
+        const rotateSpeed = 0.05 * (delta / 16);
         const tiltAngle = 15;
+        
+        // Get current position and rotation
+        const pos = el.getAttribute('position');
+        const rot = el.getAttribute('rotation');
         
         let moveX = 0;
         let moveY = 0;
         let moveZ = 0;
-        let rotY = 0;
         
-        const pos = this.el.getAttribute('position');
-        const rot = this.el.getAttribute('rotation');
+        // Map joystick input to movement
+        const { dx, dy, direction } = this.joystickData;
         
-        // JOYSTICK 1: Forward/backward (Z-axis) and left/right (X-axis)
-        const threshold = 50;
+        // Horizontal movement (left/right)
+        if (dx < -100) moveX = -moveSpeed * (Math.abs(dx) / 500);
+        else if (dx > 100) moveX = moveSpeed * (Math.abs(dx) / 500);
         
-        // Forward/backward movement from joystick 1
-        if (this.joystick1.dy < -threshold) {
-          moveZ -= moveSpeed * (Math.abs(this.joystick1.dy) / 500);
-        } else if (this.joystick1.dy > threshold) {
-          moveZ += moveSpeed * (Math.abs(this.joystick1.dy) / 500);
+        // Forward/backward movement
+        if (dy < -100) moveZ = -moveSpeed * (Math.abs(dy) / 500); // Forward
+        else if (dy > 100) moveZ = moveSpeed * (Math.abs(dy) / 500); // Backward
+
+        // Vertical movement (optional - could be mapped to another control)
+        if (direction.includes('up')) moveY = moveSpeed;
+        else if (direction.includes('down')) moveY = -moveSpeed;
+        
+        // Rotation - based on direction or specific dx value
+        if (direction.includes('left') && !direction.includes('up') && !direction.includes('down')) {
+          rot.y += rotateSpeed * 10 * (Math.abs(dx) / 500);
+        }
+        if (direction.includes('right') && !direction.includes('up') && !direction.includes('down')) {
+          rot.y -= rotateSpeed * 10 * (Math.abs(dx) / 500);
         }
         
-        // Left/right movement from joystick 1
-        if (this.joystick1.dx < -threshold) {
-          moveX -= moveSpeed * (Math.abs(this.joystick1.dx) / 500);
-        } else if (this.joystick1.dx > threshold) {
-          moveX += moveSpeed * (Math.abs(this.joystick1.dx) / 500);
-        }
-        
-        // JOYSTICK 2: Future implementation
-        // For now we'll put some placeholder code that can be activated later
-        // These would come from the second joystick:
-        
-        // Rotation (left/right turning)
-        // if (this.joystick2.dx < -threshold) {
-        //   rot.y += rotateSpeed * 10 * (Math.abs(this.joystick2.dx) / 500);
-        // } else if (this.joystick2.dx > threshold) {
-        //   rot.y -= rotateSpeed * 10 * (Math.abs(this.joystick2.dx) / 500);
-        // }
-        
-        // Up/down movement
-        // if (this.joystick2.dy < -threshold) {
-        //   moveY += moveSpeed * (Math.abs(this.joystick2.dy) / 500);
-        // } else if (this.joystick2.dy > threshold) {
-        //   moveY -= moveSpeed * (Math.abs(this.joystick2.dy) / 500);
-        // }
-        
-        // For temporary testing, we can use keyboard controls for joystick 2 functions
-        const keyboard = {
-          q: false, // Rotate left
-          e: false, // Rotate right
-          space: false, // Up
-          shift: false  // Down
-        };
-        
-        // You can uncomment this to test with keyboard before second joystick is ready
-        // document.addEventListener('keydown', (e) => {
-        //   if (e.key === 'q') keyboard.q = true;
-        //   if (e.key === 'e') keyboard.e = true;
-        //   if (e.key === ' ') keyboard.space = true;
-        //   if (e.key === 'Shift') keyboard.shift = true;
-        // });
-        // document.addEventListener('keyup', (e) => {
-        //   if (e.key === 'q') keyboard.q = false;
-        //   if (e.key === 'e') keyboard.e = false;
-        //   if (e.key === ' ') keyboard.space = false;
-        //   if (e.key === 'Shift') keyboard.shift = false;
-        // });
-        
-        // Movement based on rotation (exactly as in original)
+        // Movement based on rotation - same as original code
         const angleRad = this.THREE.MathUtils.degToRad(rot.y);
         pos.x += moveZ * Math.sin(angleRad) + moveX * Math.cos(angleRad);
         pos.z += moveZ * Math.cos(angleRad) - moveX * Math.sin(angleRad);
         pos.y += moveY;
         
-        this.el.setAttribute('position', pos);
-        this.el.setAttribute('rotation', rot);
+        el.setAttribute('position', pos);
+        el.setAttribute('rotation', rot);
         
-        // Tilting based on movement (exactly as in original)
+        // Tilting based on movement direction - same as original code
         let tiltX = 0;
         let tiltZ = 0;
         
-        if (moveZ < 0) tiltX = -tiltAngle * (Math.abs(moveZ) / moveSpeed);
-        else if (moveZ > 0) tiltX = tiltAngle * (Math.abs(moveZ) / moveSpeed);
+        if (moveZ < 0) tiltX = -tiltAngle * (Math.abs(moveZ) / moveSpeed); // Forward tilt
+        else if (moveZ > 0) tiltX = tiltAngle * (Math.abs(moveZ) / moveSpeed); // Backward tilt
         
-        if (moveX > 0) tiltZ = -tiltAngle * (Math.abs(moveX) / moveSpeed);
-        else if (moveX < 0) tiltZ = tiltAngle * (Math.abs(moveX) / moveSpeed);
+        if (moveX > 0) tiltZ = -tiltAngle * (Math.abs(moveX) / moveSpeed); // Right tilt
+        else if (moveX < 0) tiltZ = tiltAngle * (Math.abs(moveX) / moveSpeed); // Left tilt
         
-        this.el.object3D.rotation.x = this.THREE.MathUtils.degToRad(tiltX);
-        this.el.object3D.rotation.z = this.THREE.MathUtils.degToRad(tiltZ);
-        this.el.object3D.rotation.y = this.THREE.MathUtils.degToRad(rot.y);
+        el.object3D.rotation.x = this.THREE.MathUtils.degToRad(tiltX);
+        el.object3D.rotation.z = this.THREE.MathUtils.degToRad(tiltZ);
+        el.object3D.rotation.y = this.THREE.MathUtils.degToRad(rot.y);
       }
     });
     // Camera follow component
