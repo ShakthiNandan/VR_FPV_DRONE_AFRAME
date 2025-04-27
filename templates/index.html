@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Drone Training Application</title>
+    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: black;
+        }
+        .menu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 10;
+        }
+        .menu button {
+            margin: 10px;
+            padding: 15px 30px;
+            font-size: 20px;
+            border-radius: 10px;
+            background-color: #ccc;
+            border: none;
+            cursor: pointer;
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);
+        }
+        a-scene {
+            filter: blur(5px);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="menu">
+        <button onclick="location.href='{{ url_for('training') }}'">Start</button>
+        <button onclick="alert('Credits: Developed by Kaarunya')">Credits</button>
+    </div>
+
+    <a-scene>
+        <a-assets>
+            <a-asset-item id="droneModel" src="/static/models/smb.glb"></a-asset-item>
+        </a-assets>
+
+        <a-entity gltf-model="#droneModel" position="0 1.5 -3" rotation="0 0 0" animation="property: rotation; to: 0 360 0; loop: true; dur: 20000"></a-entity>
+
+        <a-light type="ambient" color="#ffffff" intensity="0.5"></a-light>
+        <a-light type="point" position="2 4 -3" intensity="1"></a-light>
+        <a-light type="point" position="-2 4 -3" intensity="1"></a-light>
+
+        <a-camera position="0 1.6 0"></a-camera>
+    </a-scene>
+
+</body>
+</html>
