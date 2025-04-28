@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request
 
 app = Flask(__name__)
 
@@ -10,7 +10,13 @@ def home():
 # Training page
 @app.route('/training')
 def training():
-    return render_template('training.html')
+    # Get control type and websocket URL from query parameters
+    control_type = request.args.get('controlType', 'keyboard')
+    websocket_url = request.args.get('websocketUrl', '')
+    
+    return render_template('training.html', 
+                          control_type=control_type,
+                          websocket_url=websocket_url)
 
 if __name__ == '__main__':
-    app.run(ssl_context=('cert.pem', 'key.pem'),debug=True,host="0.0.0.0")
+    app.run(ssl_context=('cert.pem', 'key.pem'), debug=True, host="0.0.0.0")

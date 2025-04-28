@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>Drone Training Application</title>
@@ -10,6 +11,7 @@
             overflow: hidden;
             background-color: black;
         }
+
         .menu {
             position: absolute;
             top: 50%;
@@ -17,7 +19,13 @@
             transform: translate(-50%, -50%);
             text-align: center;
             z-index: 10;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            width: 80%;
+            max-width: 500px;
         }
+
         .menu button {
             margin: 10px;
             padding: 15px 30px;
@@ -28,24 +36,81 @@
             cursor: pointer;
             box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);
         }
+
+        .menu button.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .menu button:hover {
+            background-color: #ddd;
+        }
+
+        .menu button.active:hover {
+            background-color: #3e8e41;
+        }
+
+        .menu input {
+            margin: 10px 0;
+            padding: 12px;
+            width: 90%;
+            font-size: 16px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        .menu h1 {
+            color: white;
+            margin-bottom: 20px;
+        }
+
+        .menu .option-label {
+            color: white;
+            margin-top: 15px;
+            font-size: 18px;
+            display: block;
+            text-align: left;
+            margin-left: 5%;
+        }
+
+        .control-options {
+            display: flex;
+            justify-content: center;
+            margin: 10px 0;
+        }
+
         a-scene {
             filter: blur(5px);
         }
     </style>
 </head>
-<body>
 
+<body>
     <div class="menu">
-        <button onclick="location.href='{{ url_for('training') }}'">Start</button>
-        <button onclick="alert('Credits: Developed by Kaarunya')">Credits</button>
+        <h1>Drone Training Simulator</h1>
+
+        <span class="option-label">Control Type:</span>
+        <div class="control-options">
+            <button id="keyboardBtn" class="active" onclick="selectControlType('keyboard')">Keyboard</button>
+            <button id="controllerBtn" onclick="selectControlType('controller')">Controller</button>
+        </div>
+
+        <div id="websocketSection" style="display: none;">
+            <span class="option-label">WebSocket Address:</span>
+            <input type="text" id="websocketUrl" placeholder="wss://your-ngrok-url.ngrok-free.app" value="">
+        </div>
+
+        <button id="startBtn" onclick="startSimulation()">Start Training</button>
+        <button onclick="alert('Credits: Developed by Kaarunya K, Shakthi Nandan P')">Credits</button>
     </div>
 
     <a-scene>
         <a-assets>
-            <a-asset-item id="droneModel" src="/static/models/smb.glb"></a-asset-item>
+            <a-asset-item id="droneModel" src="{{ url_for('static', filename='models/smb.glb') }}"></a-asset-item>
         </a-assets>
 
-        <a-entity gltf-model="#droneModel" position="0 1.5 -3" rotation="0 0 0" animation="property: rotation; to: 0 360 0; loop: true; dur: 20000"></a-entity>
+        <a-entity gltf-model="#droneModel" position="0 1.5 -3" rotation="0 0 0"
+            animation="property: rotation; to: 0 360 0; loop: true; dur: 20000"></a-entity>
 
         <a-light type="ambient" color="#ffffff" intensity="0.5"></a-light>
         <a-light type="point" position="2 4 -3" intensity="1"></a-light>
@@ -54,5 +119,81 @@
         <a-camera position="0 1.6 0"></a-camera>
     </a-scene>
 
+    <script>
+        let controlType = 'keyboard';
+
+        // Initialize page with stored values
+        document.addEventListener('DOMContentLoaded', function () {
+            // Check for previously stored WebSocket URL
+            const storedUrl = localStorage.getItem('websocketUrl');
+            if (storedUrl) {
+                document.getElementById('websocketUrl').value = storedUrl;
+            }
+
+            // Check if controller was previously selected
+            const storedControlType = localStorage.getItem('controlType');
+            if (storedControlType) {
+                selectControlType(storedControlType);
+            }
+
+            // Get URL parameters in case we're returning from training page
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlControlType = urlParams.get('controlType');
+            const urlWebsocketUrl = urlParams.get('websocketUrl');
+
+            // Use URL params if available (they take precedence over stored values)
+            if (urlControlType) {
+                selectControlType(urlControlType);
+            }
+
+            if (urlWebsocketUrl) {
+                document.getElementById('websocketUrl').value = urlWebsocketUrl;
+                localStorage.setItem('websocketUrl', urlWebsocketUrl);
+            }
+        });
+
+        function selectControlType(type) {
+            controlType = type;
+
+            // Store the selection
+            localStorage.setItem('controlType', type);
+
+            // Update button styling
+            document.getElementById('keyboardBtn').classList.remove('active');
+            document.getElementById('controllerBtn').classList.remove('active');
+
+            if (type === 'keyboard') {
+                document.getElementById('keyboardBtn').classList.add('active');
+                document.getElementById('websocketSection').style.display = 'none';
+            } else {
+                document.getElementById('controllerBtn').classList.add('active');
+                document.getElementById('websocketSection').style.display = 'block';
+            }
+        }
+
+        function startSimulation() {
+            let url = '{{ url_for("training") }}';
+
+            // Add query parameters
+            url += '?controlType=' + controlType;
+
+            if (controlType === 'controller') {
+                const websocketUrl = document.getElementById('websocketUrl').value.trim();
+                if (websocketUrl) {
+                    url += '&websocketUrl=' + encodeURIComponent(websocketUrl);
+
+                    // Store the WebSocket URL for future use
+                    localStorage.setItem('websocketUrl', websocketUrl);
+                } else {
+                    alert('Please enter a WebSocket URL.');
+                    return;
+                }
+            }
+
+            // Navigate to the training page with parameters
+            window.location.href = url;
+        }
+    </script>
 </body>
+
 </html>

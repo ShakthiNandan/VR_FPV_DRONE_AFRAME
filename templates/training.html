@@ -7,34 +7,123 @@
   <!-- Add shadow component for A-Frame -->
   <script src="https://unpkg.com/aframe-extras@6.1.1/dist/aframe-extras.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/loaders/RGBELoader.js"></script>
+  <style>
+    .error-message {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      padding: 10px 15px;
+      background-color: rgba(255, 0, 0, 0.7);
+      color: white;
+      font-family: Arial, sans-serif;
+      border-radius: 5px;
+      z-index: 999;
+      max-width: 80%;
+    }
+    .reconnect-button {
+      margin-top: 10px;
+      padding: 5px 10px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .reconnect-button:hover {
+      background-color: #45a049;
+    }
+    
+    /* WebSocket connection status */
+    .connection-status {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 8px 12px;
+      border-radius: 5px;
+      font-family: Arial, sans-serif;
+      z-index: 999;
+      display: flex;
+      align-items: center;
+    }
+    .status-indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+    .status-connected {
+      background-color: rgba(0, 180, 0, 0.8);
+    }
+    .status-disconnected {
+      background-color: rgba(255, 0, 0, 0.8);
+    }
+    .status-connecting {
+      background-color: rgba(255, 165, 0, 0.8);
+    }
+    
+    /* WebSocket test tool */
+    .websocket-tools {
+      position: absolute;
+      top: 50px;
+      right: 10px;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 10px;
+      border-radius: 5px;
+      font-family: Arial, sans-serif;
+      z-index: 999;
+      max-width: 300px;
+      display: none;
+    }
+    .websocket-tools.visible {
+      display: block;
+    }
+    .websocket-tools input {
+      width: 100%;
+      padding: 5px;
+      margin-bottom: 5px;
+      box-sizing: border-box;
+    }
+    .websocket-tools button {
+      padding: 5px 10px;
+      margin-right: 5px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .websocket-tools button:hover {
+      background-color: #45a049;
+    }
+    .toggle-tools {
+      background-color: #555;
+      cursor: pointer;
+      margin-left: 8px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+  </style>
 </head>
 
 <body>
   <a-scene shadow="type: pcfsoft"
-    renderer="antialias: true; physicallyCorrectLights: true; colorManagement: true; gammaOutput: true;">
+    renderer="antialias: true; physicallyCorrectLights: true; colorManagement: true;">
     <a-assets>
-      <a-asset-item id="drone-obj" src="/static/models/drone.obj"></a-asset-item>
-      <!-- If you have an MTL file for materials -->
-      <a-asset-item id="drone-mtl" src="/static/models/drone.mtl"></a-asset-item>
-      <a-asset-item id="environment" src="/static/models/smb.glb"></a-asset-item>
+      <a-asset-item id="drone-obj" src="{{ url_for('static', filename='models/drone.obj') }}"></a-asset-item>
+<a-asset-item id="drone-mtl" src="{{ url_for('static', filename='models/drone.mtl') }}"></a-asset-item>
+<a-asset-item id="environment" src="{{ url_for('static', filename='models/smb.glb') }}"></a-asset-item>
     </a-assets>
 
-    <!-- Enhanced lighting setup with large-scale shadow area -->
+    <!-- Enhanced lighting setup with shadow -->
     <a-entity light="type: ambient; color: #BBB; intensity: 0.5"></a-entity>
     <a-entity id="directional-light" light="type: directional; 
                         color: #FFF; 
                         intensity: 0.8; 
-                        castShadow: true" position="50 50 50" shadow="mapSize: 4096; 
-                         far: 5000; 
-                         near: 1; 
-                         left: -2000;
-                         right: 2000;
-                         top: 2000;
-                         bottom: -2000;
-                         bias: -0.0005" shadow-follow="target: #drone; offset: 0 200 0; smoothing: 0.05"></a-entity>
+                        castShadow: true" position="50 50 50" shadow="cast: true"></a-entity>
 
     <!-- Additional fill lights -->
-
     <a-entity light="type: directional; intensity: 0.6;" position="2 4 1" shadow="cast: true"></a-entity>
     <a-entity light="type: ambient; intensity: 0.4;"></a-entity>
 
@@ -45,10 +134,6 @@
       scale="0.5 0.5 0.5" drone-controls shadow="cast: true; receive: false">
     </a-entity>
 
-    <a-entity id="smb" obj-model="obj: #smb-obj; mtl: #smb-mtl" position="0 1.6 -5" scale="0.5 0.5 0.5"
-      shadow="cast: true; receive: true">
-    </a-entity>
-
     <!-- Camera that follows the drone -->
     <a-entity id="camera-rig" position="0 0 0" camera-follow="target: #drone; offset: 0 -7 0">
       <a-camera position="0 0 0" wasd-controls-enabled="false" fov="95" look-controls="enabled: false"></a-camera>
@@ -56,6 +141,24 @@
 
     <a-sky color="#87CEEB"></a-sky>
   </a-scene>
+
+  <!-- WebSocket Connection Status Indicator -->
+  <div class="connection-status">
+    <div class="status-indicator status-disconnected"></div>
+    <span>WebSocket: Disconnected</span>
+    <span class="toggle-tools">Tools</span>
+  </div>
+
+  <!-- WebSocket Connection Tester Tool -->
+  <div class="websocket-tools">
+    <h3>WebSocket Diagnostic Tools</h3>
+    <input type="text" id="ws-url" placeholder="wss://your-ngrok-url.ngrok-free.app" value="">
+    <button id="btn-test-connection">Test Connection</button>
+    <button id="btn-reconnect">Reconnect</button>
+    <button id="btn-to-keyboard">Switch to Keyboard</button>
+    <button id="btn-to-menu">Return to Menu</button>
+    <div id="connection-log" style="margin-top: 10px; max-height: 150px; overflow-y: auto;"></div>
+  </div>
 
   <script>
     AFRAME.registerComponent('hdr-environment', {
@@ -79,7 +182,7 @@
 
         new THREE.RGBELoader()
           .setDataType(THREE.UnsignedByteType)
-          .load('sky.hdr', (texture) => {
+          .load("{{ url_for('static', filename='models/sky.hdr') }}", (texture) => {
             const envMap = pmremGenerator.fromEquirectangular(texture).texture;
             scene.environment = envMap;
             texture.dispose();
@@ -87,19 +190,62 @@
           });
       }
     });
+    
     AFRAME.registerComponent('drone-controls', {
+      schema: {
+        controlType: {type: 'string', default: 'keyboard'},
+        websocketUrl: {type: 'string', default: ''}
+      },
+      
       init: function () {
         this.THREE = AFRAME.THREE;
         this.rotation = { x: 0, y: 0, z: 0 };
         
-        // We'll separate controls for two joysticks
-        // Joystick 1: forward/backward/left/right movement
-        // Joystick 2: up/down movement and rotation
+        // Default keyboard movement values
+        this.keys = {};
+        this.moveX = 0;
+        this.moveY = 0;
+        this.moveZ = 0;
+        this.rotY = 0;
+        
+        // For joystick controller
         this.joystick1 = { dx: 0, dy: 0, direction: 'center' };
         this.joystick2 = { dx: 0, dy: 0, direction: 'center' };
         
-        // Calibration data from backend
-        // These values match the values in calibration_data_joy1.json and calibration_data_joy2.json
+        // Process URL parameters to determine controller type
+        const urlParams = new URLSearchParams(window.location.search);
+        this.data.controlType = urlParams.get('controlType') || this.data.controlType;
+        this.data.websocketUrl = urlParams.get('websocketUrl') || this.data.websocketUrl;
+        
+        console.log(`Control type: ${this.data.controlType}`);
+        console.log(`WebSocket URL: ${this.data.websocketUrl}`);
+        
+        if (this.data.controlType === 'keyboard') {
+          this.setupKeyboardControls();
+        } else if (this.data.controlType === 'controller') {
+          // Only load calibration and connect to WebSocket if controller mode is selected
+          this.loadCalibrationData();
+          this.connectWebSocket();
+        }
+      },
+      
+      setupKeyboardControls: function() {
+        // Set up keyboard event listeners
+        window.addEventListener('keydown', this.onKeyDown.bind(this));
+        window.addEventListener('keyup', this.onKeyUp.bind(this));
+        console.log('Keyboard controls initialized');
+      },
+      
+      onKeyDown: function(evt) {
+        this.keys[evt.code] = true;
+      },
+      
+      onKeyUp: function(evt) {
+        this.keys[evt.code] = false;
+      },
+      
+      loadCalibrationData: function() {
+        // Initialize calibration structure with values from JSON files
         this.calibration = {
           joystick1: {
             center: { x: 1971, y: 1909 },
@@ -117,6 +263,11 @@
           }
         };
         
+        // Calculate thresholds based on the calibration data
+        this.calculateThresholds();
+      },
+      
+      calculateThresholds: function() {
         // Calculate directional thresholds based on calibration
         this.thresholds = {
           joystick1: {
@@ -132,64 +283,237 @@
             right: Math.abs(this.calibration.joystick2.center.x - this.calibration.joystick2.right.x) * 0.5
           }
         };
-        
-        // Connect to your Python WebSocket server
-        //this.socket = new WebSocket('wss://192.168.162.58:8765');
-        
-        this.socket = new WebSocket('wss://6303-157-51-73-202.ngrok-free.app');
-        
-        this.socket.addEventListener('open', (event) => {
-          console.log('Connected to joystick WebSocket server');
-        });
-        
-        this.socket.addEventListener('message', (event) => {
-          const data = JSON.parse(event.data);
-          
-          // Now handling data for both joysticks
-          if (data.joystick1) {
-            this.joystick1 = {
-              dx: data.joystick1.dx,
-              dy: data.joystick1.dy,
-              direction: data.joystick1.direction
-            };
-          }
-          
-          if (data.joystick2) {
-            this.joystick2 = {
-              dx: data.joystick2.dx,
-              dy: data.joystick2.dy,
-              direction: data.joystick2.direction
-            };
-          }
-          
-          console.log('Joystick1 data:', this.joystick1);
-          console.log('Joystick2 data:', this.joystick2);
-        });
-        
-        this.socket.addEventListener('close', (event) => {
-          console.log('WebSocket connection closed');
-        });
+        console.log('Thresholds calculated:', this.thresholds);
       },
       
-      tick: function (time, delta) {
+      connectWebSocket: function() {
+        // Remove any existing error message
+        const existingError = document.querySelector('.error-message');
+        if (existingError) {
+          existingError.remove();
+        }
+        
+        // Only attempt to connect if in controller mode and URL is provided
+        if (this.data.controlType !== 'controller' || !this.data.websocketUrl) {
+          console.log('WebSocket connection skipped: not in controller mode or no URL provided');
+          return;
+        }
+        
+        try {
+          console.log('Attempting to connect to WebSocket at:', this.data.websocketUrl);
+          // Update connection status to connecting
+          this.updateConnectionStatus('connecting');
+          
+          this.socket = new WebSocket(this.data.websocketUrl);
+          
+          this.socket.addEventListener('open', (event) => {
+            console.log('Connected to joystick WebSocket server:', this.data.websocketUrl);
+            // Remove any error message if connection is successful
+            const errorDiv = document.querySelector('.error-message');
+            if (errorDiv) {
+              errorDiv.remove();
+            }
+            // Update connection status indicator
+            this.updateConnectionStatus('connected');
+            
+            // Log successful connection to the diagnostic tools
+            this.logToConnectionTools('✅ Connected successfully to: ' + this.data.websocketUrl);
+          });
+          
+          this.socket.addEventListener('message', (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              
+              if (data.joystick1) {
+                this.joystick1 = {
+                  dx: data.joystick1.dx,
+                  dy: data.joystick1.dy,
+                  direction: data.joystick1.direction
+                };
+              }
+              
+              if (data.joystick2) {
+                this.joystick2 = {
+                  dx: data.joystick2.dx,
+                  dy: data.joystick2.dy,
+                  direction: data.joystick2.direction
+                };
+              }
+            } catch (error) {
+              console.error('Error parsing WebSocket message:', error);
+            }
+          });
+          
+          this.socket.addEventListener('error', (event) => {
+            console.error('WebSocket error:', event);
+            // Update connection status indicator
+            this.updateConnectionStatus('disconnected');
+            
+            // Log error to the diagnostic tools
+            this.logToConnectionTools('❌ Connection error with: ' + this.data.websocketUrl);
+            
+            // Show error to user
+            if (!document.querySelector('.error-message')) {
+              const errorDiv = document.createElement('div');
+              errorDiv.className = 'error-message';
+              errorDiv.innerHTML = `
+                <p>WebSocket connection error. Check the URL and make sure the server is running.</p>
+                <p>URL: ${this.data.websocketUrl}</p>
+                <p>Common issues:</p>
+                <ul>
+                  <li>Ngrok URL has expired (they typically last 2-8 hours)</li>
+                  <li>Server is not running or has restarted</li>
+                  <li>Network connectivity issues</li>
+                </ul>
+                <p>You can continue with keyboard controls or try reconnecting.</p>
+                <button class="reconnect-button">Reconnect</button>
+                <button class="reconnect-button" style="background-color:#FFA500;" 
+                  onclick="window.location.href='?controlType=keyboard'">
+                  Switch to Keyboard
+                </button>
+                <button class="tools-button" style="background-color:#3498db;">
+                  Open Diagnostic Tools
+                </button>
+              `;
+              document.body.appendChild(errorDiv);
+              
+              // Add reconnect functionality
+              const reconnectBtn = errorDiv.querySelector('.reconnect-button');
+              if (reconnectBtn) {
+                reconnectBtn.addEventListener('click', () => {
+                  this.connectWebSocket();
+                });
+              }
+              
+              // Add tools functionality
+              const toolsBtn = errorDiv.querySelector('.tools-button');
+              if (toolsBtn) {
+                toolsBtn.addEventListener('click', () => {
+                  const wsTools = document.querySelector('.websocket-tools');
+                  if (wsTools) {
+                    wsTools.classList.add('visible');
+                  }
+                });
+              }
+            }
+            
+            // Fall back to keyboard controls
+            this.setupKeyboardControls();
+          });
+          
+          this.socket.addEventListener('close', (event) => {
+            console.log('WebSocket connection closed');
+            // Update connection status indicator
+            this.updateConnectionStatus('disconnected');
+            
+            // Log to diagnostic tools
+            this.logToConnectionTools('Connection closed with code: ' + event.code);
+            
+            // Fall back to keyboard controls if not already set up
+            if (this.data.controlType === 'controller') {
+              this.setupKeyboardControls();
+            }
+          });
+        } catch (error) {
+          console.error('Error setting up WebSocket:', error);
+          // Update connection status
+          this.updateConnectionStatus('disconnected');
+          // Log error to diagnostic tools
+          this.logToConnectionTools('❌ Error: ' + error.message);
+          // Fall back to keyboard controls
+          this.setupKeyboardControls();
+        }
+      },
+      
+      logToConnectionTools: function(message) {
+        const connectionLog = document.getElementById('connection-log');
+        if (connectionLog) {
+          const logEntry = document.createElement('div');
+          logEntry.textContent = message;
+          connectionLog.prepend(logEntry);
+        }
+      },
+      
+      updateConnectionStatus: function(status) {
+        const statusElement = document.querySelector('.connection-status');
+        if (!statusElement) return;
+
+        const indicator = statusElement.querySelector('.status-indicator');
+        const statusText = statusElement.querySelector('span:not(.toggle-tools)');
+        
+        if (status === 'connected') {
+          indicator.className = 'status-indicator status-connected';
+          statusText.textContent = 'WebSocket: Connected';
+        } else if (status === 'disconnected') {
+          indicator.className = 'status-indicator status-disconnected';
+          statusText.textContent = 'WebSocket: Disconnected';
+        } else if (status === 'connecting') {
+          indicator.className = 'status-indicator status-connecting';
+          statusText.textContent = 'WebSocket: Connecting...';
+        }
+      },
+      
+      processKeyboardInput: function(delta) {
         const moveSpeed = 0.01 * delta;
-        const rotateSpeed = 0.005 * delta;
-        const tiltAngle = 1;
+        const rotateSpeed = 0.05 * delta;
         
-        let moveX = 0;
-        let moveY = 0;
-        let moveZ = 0;
-        let rotY = 0;
+        // Reset movement values
+        this.moveX = 0;
+        this.moveY = 0;
+        this.moveZ = 0;
+        this.rotY = 0;
         
-        const pos = this.el.getAttribute('position');
-        const rot = this.el.getAttribute('rotation');
+        // Forward/backward (Z-axis)
+        if (this.keys['KeyW'] || this.keys['ArrowUp']) {
+          this.moveZ -= moveSpeed;
+        }
+        if (this.keys['KeyS'] || this.keys['ArrowDown']) {
+          this.moveZ += moveSpeed;
+        }
+        
+        // Left/right (X-axis)
+        if (this.keys['KeyA'] || this.keys['ArrowLeft']) {
+          this.moveX -= moveSpeed;
+        }
+        if (this.keys['KeyD'] || this.keys['ArrowRight']) {
+          this.moveX += moveSpeed;
+        }
+        
+        // Up/down (Y-axis)
+        if (this.keys['Space']) {
+          this.moveY += moveSpeed;
+        }
+        if (this.keys['ShiftLeft'] || this.keys['ShiftRight']) {
+          this.moveY -= moveSpeed;
+        }
+        
+        // Rotation (Y-axis)
+        if (this.keys['KeyQ']) {
+          this.rotY += rotateSpeed * 10;
+        }
+        if (this.keys['KeyE']) {
+          this.rotY -= rotateSpeed * 10;
+        }
+      },
+      
+      processJoystickInput: function(delta) {
+        // If calibration data hasn't loaded yet, skip joystick processing
+        if (!this.calibration?.joystick1 || !this.calibration?.joystick2 || !this.thresholds) {
+          return;
+        }
+        
+        const moveSpeed = 0.01 * delta;
+        const rotateSpeed = 0.05 * delta;
+        
+        // Reset movement values
+        this.moveX = 0;
+        this.moveY = 0;
+        this.moveZ = 0;
+        this.rotY = 0;
         
         // Use joystick specific thresholds based on calibration data
         const joy1_thresholds = this.thresholds.joystick1;
         const joy2_thresholds = this.thresholds.joystick2;
-        
-        // Calculate intensity based on how far joystick is pushed from center
-        // This will give smoother, more proportional control
         
         // JOYSTICK 1: Forward/backward (Z-axis) and left/right (X-axis)
         if (Math.abs(this.joystick1.dy) > joy1_thresholds.up) {
@@ -202,9 +526,9 @@
           const intensity = Math.min(Math.abs(this.joystick1.dy) / maxVertRange, 1.0);
           
           if (this.joystick1.dy < 0) { // Up - Move forward
-            moveZ -= moveSpeed * intensity * 2;
+            this.moveZ -= moveSpeed * intensity * 2;
           } else { // Down - Move backward
-            moveZ += moveSpeed * intensity * 2;
+            this.moveZ += moveSpeed * intensity * 2;
           }
         }
         
@@ -218,9 +542,9 @@
           const intensity = Math.min(Math.abs(this.joystick1.dx) / maxHorizRange, 1.0);
           
           if (this.joystick1.dx < 0) { // Left - Move left
-            moveX -= moveSpeed * intensity * 2;
+            this.moveX -= moveSpeed * intensity * 2;
           } else { // Right - Move right
-            moveX += moveSpeed * intensity * 2;
+            this.moveX += moveSpeed * intensity * 2;
           }
         }
         
@@ -235,9 +559,9 @@
           const intensity = Math.min(Math.abs(this.joystick2.dy) / maxVertRange, 1.0);
           
           if (this.joystick2.dy < 0) { // Up - Increase altitude
-            moveY += moveSpeed * intensity * 2;
+            this.moveY += moveSpeed * intensity * 2;
           } else { // Down - Decrease altitude
-            moveY -= moveSpeed * intensity * 2;
+            this.moveY -= moveSpeed * intensity * 2;
           }
         }
         
@@ -251,43 +575,50 @@
           const intensity = Math.min(Math.abs(this.joystick2.dx) / maxHorizRange, 1.0);
           
           if (this.joystick2.dx < 0) { // Left - Turn left
-            rot.y += rotateSpeed * 20 * intensity;
+            this.rotY += rotateSpeed * 20 * intensity;
           } else { // Right - Turn right
-            rot.y -= rotateSpeed * 20 * intensity;
+            this.rotY -= rotateSpeed * 20 * intensity;
           }
         }
+      },
+      
+      tick: function (time, delta) {
+        // Process input based on control type
+        if (this.data.controlType === 'keyboard' || !this.socket || this.socket.readyState !== WebSocket.OPEN) {
+          this.processKeyboardInput(delta);
+        } else if (this.data.controlType === 'controller') {
+          this.processJoystickInput(delta);
+        }
+        
+        const pos = this.el.getAttribute('position');
+        const rot = this.el.getAttribute('rotation');
+        
+        // Apply rotation from controls
+        rot.y += this.rotY;
         
         // Movement based on rotation
         const angleRad = this.THREE.MathUtils.degToRad(rot.y);
-        pos.x += moveZ * Math.sin(angleRad) + moveX * Math.cos(angleRad);
-        pos.z += moveZ * Math.cos(angleRad) - moveX * Math.sin(angleRad);
-        pos.y += moveY;
+        pos.x += this.moveZ * Math.sin(angleRad) + this.moveX * Math.cos(angleRad);
+        pos.z += this.moveZ * Math.cos(angleRad) - this.moveX * Math.sin(angleRad);
+        pos.y += this.moveY;
         
         this.el.setAttribute('position', pos);
         this.el.setAttribute('rotation', rot);
         
-        // Tilting based on movement
-        let tiltX = 0;
-        let tiltZ = 0;
-        
-        if (moveZ < 0) tiltX = -tiltAngle * (Math.abs(moveZ) / moveSpeed);
-        else if (moveZ > 0) tiltX = tiltAngle * (Math.abs(moveZ) / moveSpeed);
-        
-        if (moveX > 0) tiltZ = -tiltAngle * (Math.abs(moveX) / moveSpeed);
-        else if (moveX < 0) tiltZ = tiltAngle * (Math.abs(moveX) / moveSpeed);
-        
-        this.el.object3D.rotation.x = this.THREE.MathUtils.degToRad(tiltX);
-        this.el.object3D.rotation.z = this.THREE.MathUtils.degToRad(tiltZ);
+        // Keep drone level - no tilting
+        this.el.object3D.rotation.x = 0;
+        this.el.object3D.rotation.z = 0;
         this.el.object3D.rotation.y = this.THREE.MathUtils.degToRad(rot.y);
       }
     });
+    
     // Camera follow component
     AFRAME.registerComponent('camera-follow', {
       schema: {
         target: { type: 'selector' },
         offset: { type: 'vec3', default: { x: 0, y: 0.2, z: 0 } },
         smoothing: { type: 'number', default: 10 },
-        rotationSmoothing: { type: 'number', default: 3 } // Added rotation smoothing factor
+        rotationSmoothing: { type: 'number', default: 3 }
       },
 
       init: function () {
@@ -305,11 +636,10 @@
         const droneRotation = target.getAttribute('rotation');
 
         // Calculate camera position based on drone's rotation
-        // More direct attachment to drone position with minimal offset
         const offset = this.data.offset;
         const angleRad = THREE.MathUtils.degToRad(droneRotation.y);
 
-        // Set camera position - directly on the drone with minimal offset
+        // Set camera position with offset
         const newPosition = {
           x: this.targetPosition.x,
           y: this.targetPosition.y + offset.y,
@@ -326,11 +656,11 @@
 
         this.el.setAttribute('position', currentPos);
 
-        // Apply smoothed rotation - match drone rotation completely
+        // Apply smoothed rotation
         const rotSmoothing = Math.min(this.data.rotationSmoothing * (delta / 1000), 1);
         const currentRot = this.el.getAttribute('rotation');
 
-        // Match all rotation axes for proper drone view
+        // Match rotation axes with normalization of angle differences
         let rotDiffY = droneRotation.y - currentRot.y;
         if (rotDiffY > 180) rotDiffY -= 360;
         if (rotDiffY < -180) rotDiffY += 360;
@@ -351,62 +681,157 @@
       }
     });
 
-    // Shadow follow component - keeps the directional light's shadow camera following the drone
-    AFRAME.registerComponent('shadow-follow', {
-      schema: {
-        target: { type: 'selector' },
-        offset: { type: 'vec3', default: { x: 0, y: 200, z: 0 } },
-        smoothing: { type: 'number', default: 0.05 }
-      },
-
-      init: function () {
-        this.targetPosition = new THREE.Vector3();
-        this.currentPosition = new THREE.Vector3();
-
-        // For debugging shadow camera
-        if (false) { // Set to true to see shadow camera
-          this.el.components.light.light.shadow.camera.visible = true;
-          const helper = new THREE.CameraHelper(this.el.components.light.light.shadow.camera);
-          document.querySelector('a-scene').object3D.add(helper);
+    // WebSocket diagnostic tools functionality
+    document.addEventListener('DOMContentLoaded', function() {
+      // Get the WebSocket URL from the URL parameters
+      const urlParams = new URLSearchParams(window.location.search);
+      const wsUrl = urlParams.get('websocketUrl') || '';
+      
+      // Retrieve any stored WebSocket URL from localStorage as fallback
+      const storedUrl = localStorage.getItem('websocketUrl') || '';
+      
+      // Initialize the WebSocket tools
+      const wsTools = document.querySelector('.websocket-tools');
+      const wsUrlInput = document.getElementById('ws-url');
+      const connectionStatus = document.querySelector('.connection-status');
+      const toggleTools = document.querySelector('.toggle-tools');
+      const btnTestConnection = document.getElementById('btn-test-connection');
+      const btnReconnect = document.getElementById('btn-reconnect');
+      const btnToKeyboard = document.getElementById('btn-to-keyboard');
+      const btnReturnToMenu = document.getElementById('btn-to-menu');
+      const connectionLog = document.getElementById('connection-log');
+      
+      // Set the WebSocket URL in the input field, prioritizing URL params over stored values
+      if (wsUrl) {
+        wsUrlInput.value = wsUrl;
+        // Also update localStorage for future use
+        localStorage.setItem('websocketUrl', wsUrl);
+      } else if (storedUrl) {
+        wsUrlInput.value = storedUrl;
+        // If we're in controller mode but no URL in params, use the stored one
+        if (urlParams.get('controlType') === 'controller') {
+          logConnectionMessage('Using stored WebSocket URL: ' + storedUrl);
         }
-      },
-
-      tick: function (time, delta) {
-        const target = this.data.target;
-        if (!target) return;
-
-        // Get target position
-        target.object3D.getWorldPosition(this.targetPosition);
-
-        // Calculate new position with offset
-        const newX = this.targetPosition.x + this.data.offset.x;
-        const newY = this.targetPosition.y + this.data.offset.y;
-        const newZ = this.targetPosition.z + this.data.offset.z;
-
-        // Get current light position
-        const lightPos = this.el.object3D.position;
-
-        // Apply smoothing
-        lightPos.x += (newX - lightPos.x) * this.data.smoothing;
-        lightPos.y += (newY - lightPos.y) * this.data.smoothing;
-        lightPos.z += (newZ - lightPos.z) * this.data.smoothing;
-
-        // Update shadow camera
-        const light = this.el.components.light;
-        if (light && light.light && light.light.shadow) {
-          // Force shadow map to update
-          light.light.shadow.needsUpdate = true;
-
-
-          // Only access shadow map if it exists
-          if (light.light.shadow.map) {
-            light.light.shadow.map.needsUpdate = true;
-          }
-
-          // Update shadow camera matrices
-          light.light.shadow.camera.updateProjectionMatrix();
-          light.light.shadow.camera.updateMatrixWorld();
+      }
+      
+      // Toggle the WebSocket tools visibility
+      toggleTools.addEventListener('click', function() {
+        wsTools.classList.toggle('visible');
+      });
+      
+      // Test WebSocket connection button
+      btnTestConnection.addEventListener('click', function() {
+        const testUrl = wsUrlInput.value.trim();
+        if (!testUrl) {
+          logConnectionMessage('Please enter a WebSocket URL');
+          return;
         }
+        
+        // Store the URL for future use
+        localStorage.setItem('websocketUrl', testUrl);
+        
+        logConnectionMessage('Testing connection to ' + testUrl + '...');
+        
+        try {
+          // Update the status indicator
+          updateConnectionStatusUI('connecting');
+          
+          // Create a test WebSocket connection
+          const testSocket = new WebSocket(testUrl);
+          
+          testSocket.addEventListener('open', function() {
+            logConnectionMessage('✅ Connection successful!');
+            updateConnectionStatusUI('connected');
+            
+            // Close the test connection after 2 seconds
+            setTimeout(function() {
+              testSocket.close();
+            }, 2000);
+          });
+          
+          testSocket.addEventListener('error', function(event) {
+            logConnectionMessage('❌ Connection failed. Check the URL and server.');
+            updateConnectionStatusUI('disconnected');
+          });
+          
+          testSocket.addEventListener('close', function() {
+            logConnectionMessage('Test connection closed');
+          });
+        } catch (error) {
+          logConnectionMessage('❌ Error: ' + error.message);
+          updateConnectionStatusUI('disconnected');
+        }
+      });
+      
+      // Reconnect button - changes the URL and reloads the page
+      btnReconnect.addEventListener('click', function() {
+        const newUrl = wsUrlInput.value.trim();
+        if (!newUrl) {
+          logConnectionMessage('Please enter a WebSocket URL');
+          return;
+        }
+        
+        // Store the new URL for future use
+        localStorage.setItem('websocketUrl', newUrl);
+        
+        // Update the URL and reload the page
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set('websocketUrl', newUrl);
+        window.location.href = currentUrl.toString();
+      });
+      
+      // Switch to keyboard controls button
+      btnToKeyboard.addEventListener('click', function() {
+        // Store control type preference
+        localStorage.setItem('controlType', 'keyboard');
+        
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set('controlType', 'keyboard');
+        window.location.href = currentUrl.toString();
+      });
+      
+      // Return to main menu button
+      btnReturnToMenu.addEventListener('click', function() {
+        // Store the current WebSocket URL for use on the main page
+        const currentWsUrl = wsUrlInput.value.trim();
+        if (currentWsUrl) {
+          localStorage.setItem('websocketUrl', currentWsUrl);
+        }
+        
+        // Navigate back to the main menu with parameters preserved
+        const controlType = urlParams.get('controlType') || 'keyboard';
+        window.location.href = '{{ url_for("home") }}?controlType=' + controlType + 
+                       (currentWsUrl ? '&websocketUrl=' + encodeURIComponent(currentWsUrl) : '');
+      });
+      
+      // Helper function to log connection messages
+      function logConnectionMessage(message) {
+        const logEntry = document.createElement('div');
+        logEntry.textContent = message;
+        connectionLog.prepend(logEntry);
+      }
+      
+      // Helper function to update the connection status UI
+      function updateConnectionStatusUI(status) {
+        const indicator = connectionStatus.querySelector('.status-indicator');
+        const statusText = connectionStatus.querySelector('span:not(.toggle-tools)');
+        
+        if (status === 'connected') {
+          indicator.className = 'status-indicator status-connected';
+          statusText.textContent = 'WebSocket: Connected';
+        } else if (status === 'disconnected') {
+          indicator.className = 'status-indicator status-disconnected';
+          statusText.textContent = 'WebSocket: Disconnected';
+        } else if (status === 'connecting') {
+          indicator.className = 'status-indicator status-connecting';
+          statusText.textContent = 'WebSocket: Connecting...';
+        }
+      }
+      
+      // Check if ngrok URL is valid
+      if (wsUrl && wsUrl.includes('ngrok-free.app')) {
+        logConnectionMessage('Detected ngrok URL: ' + wsUrl);
+        logConnectionMessage('Note: ngrok URLs expire after a few hours. If connection fails, you may need to restart ngrok and get a new URL.');
       }
     });
   </script>

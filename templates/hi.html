@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <script>
+    const ws = new WebSocket("wss://5934-157-51-66-200.ngrok-free.app");
+    ws.onopen = () => console.log("OPEN");
+    ws.onerror = (e) => console.error("ERROR", e);
+    ws.onclose = (e) => console.log("CLOSED", e);
+  </script>
+</body>
+</html>
