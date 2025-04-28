@@ -283,9 +283,6 @@
             right: Math.abs(this.calibration.joystick2.center.x - this.calibration.joystick2.right.x) * 0.5
           }
         };
-<<<<<<< HEAD
-        console.log('Thresholds calculated:', this.thresholds);
-=======
         
         // Connect to your Python WebSocket server
         //this.socket = new WebSocket('wss://192.168.43.50:8765');
@@ -323,7 +320,6 @@
         this.socket.addEventListener('close', (event) => {
           console.log('WebSocket connection closed');
         });
->>>>>>> a54e894f1b5f13970778fff3013e25b83761d85a
       },
       
       connectWebSocket: function() {
