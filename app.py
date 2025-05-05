@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, url_for
 
 app = Flask(__name__)
 
@@ -19,4 +19,4 @@ def training():
                           websocket_url=websocket_url)
 
 if __name__ == '__main__':
-    app.run(ssl_context=('cert.pem', 'key.pem'), debug=True, host="0.0.0.0")
+    app.run(ssl_context=('cert.pem', 'key.pem'), host="0.0.0.0")

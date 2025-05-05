@@ -6,7 +6,10 @@
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <!-- Add shadow component for A-Frame -->
   <script src="https://unpkg.com/aframe-extras@6.1.1/dist/aframe-extras.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/loaders/RGBELoader.js"></script>
+  
+  <!-- Load Three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
+  
   <style>
     .error-message {
       position: absolute;
@@ -109,7 +112,7 @@
 
 <body>
   <a-scene shadow="type: pcfsoft"
-    renderer="antialias: true; physicallyCorrectLights: true; colorManagement: true;">
+    renderer="antialias: true; physicallyCorrectLights: true; colorManagement: true;" hdr-environment>
     <a-assets>
       <a-asset-item id="drone-obj" src="{{ url_for('static', filename='models/drone.obj') }}"></a-asset-item>
 <a-asset-item id="drone-mtl" src="{{ url_for('static', filename='models/drone.mtl') }}"></a-asset-item>
@@ -127,7 +130,7 @@
     <a-entity light="type: directional; intensity: 0.6;" position="2 4 1" shadow="cast: true"></a-entity>
     <a-entity light="type: ambient; intensity: 0.4;"></a-entity>
 
-    <a-entity gltf-model="#environment" position="0 0 0" scale="5 5 5" shadow="cast: true; receive: true"></a-entity>
+    <a-entity gltf-model="#environment" position="0 0 0" scale="3 3 3" shadow="cast: true; receive: true"></a-entity>
 
     <!-- Drone Entity -->
     <a-entity id="drone" obj-model="obj: #drone-obj; mtl: #drone-mtl" visible="true" position="0 1.6 -5"
@@ -139,7 +142,7 @@
       <a-camera position="0 0 0" wasd-controls-enabled="false" fov="95" look-controls="enabled: false"></a-camera>
     </a-entity>
 
-    <a-sky color="#87CEEB"></a-sky>
+    <!-- Remove a-sky element since we're using the HDR environment map as background -->
   </a-scene>
 
   <!-- WebSocket Connection Status Indicator -->
@@ -169,25 +172,42 @@
 
         if (!renderer) {
           sceneEl.addEventListener('renderstart', () => {
-            this.loadHDR(sceneEl.renderer, scene);
+            this.loadEnvironment(sceneEl.renderer, scene);
           });
         } else {
-          this.loadHDR(renderer, scene);
+          this.loadEnvironment(renderer, scene);
         }
       },
 
-      loadHDR: function (renderer, scene) {
-        const pmremGenerator = new THREE.PMREMGenerator(renderer);
-        pmremGenerator.compileEquirectangularShader();
-
-        new THREE.RGBELoader()
-          .setDataType(THREE.UnsignedByteType)
-          .load("{{ url_for('static', filename='models/sky.hdr') }}", (texture) => {
-            const envMap = pmremGenerator.fromEquirectangular(texture).texture;
-            scene.environment = envMap;
-            texture.dispose();
-            pmremGenerator.dispose();
-          });
+      loadEnvironment: function (renderer, scene) {
+        console.log("Starting environment map loading");
+        
+        // Create a basic sky color as the environment
+        this.createBasicEnvironment(renderer, scene);
+      },
+      
+      createBasicEnvironment: function(renderer, scene) {
+        console.log("Creating basic environment");
+        
+        // Set a nice sky blue color as background
+        scene.background = new THREE.Color("#87CEEB");
+        
+        // Create a simple ambient light for basic illumination
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        
+        // Create a hemisphere light for more natural outdoor lighting
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.7);
+        hemiLight.position.set(0, 50, 0);
+        scene.add(hemiLight);
+        
+        // Add a directional light to simulate sun
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(50, 50, 50);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+        
+        console.log("Basic environment created successfully");
       }
     });
     
@@ -285,9 +305,9 @@
         };
         
         // Connect to your Python WebSocket server
-        //this.socket = new WebSocket('wss://192.168.43.50:8765');
+        this.socket = new WebSocket('wss://192.168.14.58:8765');
         
-        this.socket = new WebSocket('wss://12e-103-130-89-139.ngrok-free.app');
+       // this.socket = new WebSocket('wss://12e-103-130-89-139.ngrok-free.app');
         
         this.socket.addEventListener('open', (event) => {
           console.log('Connected to joystick WebSocket server');
